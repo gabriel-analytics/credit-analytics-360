@@ -1,0 +1,42 @@
+artifact_path: file:///C:/Users/lineg/credit-analytics-360/ml/mlruns/703922072848625532/models/m-d676808822204e42b74b4a6f6d6736b8/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.10.2
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.7.2
+    skops_trusted_types: null
+is_signature_from_type_hint: false
+mlflow_version: 3.12.0
+model_id: m-d676808822204e42b74b4a6f6d6736b8
+model_size_bytes: 1158668
+model_uuid: m-d676808822204e42b74b4a6f6d6736b8
+prompts: null
+run_id: 2668c0eecb8640feb0e27031205b44cc
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "overall_default_rate", "required": true},
+    {"type": "double", "name": "avg_days_late", "required": true}, {"type": "double",
+    "name": "app_engagement_score", "required": true}, {"type": "long", "name": "days_since_last_login",
+    "required": true}, {"type": "integer", "name": "products_count", "required": true},
+    {"type": "double", "name": "income_declared", "required": true}, {"type": "double",
+    "name": "best_payment_streak", "required": true}, {"type": "long", "name": "total_contracts",
+    "required": true}, {"type": "string", "name": "acquisition_channel", "required":
+    true}, {"type": "string", "name": "age_group", "required": true}, {"type": "string",
+    "name": "customer_segment", "required": true}]'
+  outputs: '[{"type": "long", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-05-16 14:27:15.882133'

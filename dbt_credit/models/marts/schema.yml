@@ -1,0 +1,121 @@
+version: 2
+
+models:
+  - name: fct_credit_score
+    description: "Credit score 0-1000 por cliente com risk tier e alerta de 30 dias"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+      - name: credit_score
+        tests:
+          - not_null
+      - name: risk_tier
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["very_low", "low", "medium", "high", "very_high"]
+      - name: alert_30d
+        tests:
+          - not_null
+      - name: app_engagement_score
+        tests:
+          - not_null
+      - name: component_payment
+        tests:
+          - not_null
+      - name: _loaded_at
+        tests:
+          - not_null
+
+  - name: fct_customer_ltv
+    description: "LTV realizado e projetado por cliente com segmento"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+      - name: ltv_segment
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["low", "medium", "high", "champion"]
+      - name: realized_ltv
+        tests:
+          - not_null
+      - name: projected_ltv_12m
+        tests:
+          - not_null
+      - name: acquisition_channel
+        tests:
+          - not_null
+
+  - name: fct_portfolio_health
+    description: "Saude do portfolio por mes — default rate, NPL, exposicao"
+    columns:
+      - name: mes
+        tests:
+          - not_null
+          - unique
+      - name: total_active_contracts
+        tests:
+          - not_null
+      - name: total_exposure
+        tests:
+          - not_null
+      - name: default_rate
+        tests:
+          - not_null
+      - name: npl_ratio
+        tests:
+          - not_null
+      - name: is_peak_month
+        tests:
+          - not_null
+
+  - name: fct_collection_efficiency
+    description: "Eficiencia de cobranca por canal e janela de timing"
+    columns:
+      - name: channel_used
+        tests:
+          - not_null
+      - name: trigger_bucket
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["early", "mid", "late", "bad"]
+      - name: total_actions
+        tests:
+          - not_null
+      - name: recovery_rate_pct
+        tests:
+          - not_null
+      - name: best_trigger_bucket
+        tests:
+          - not_null
+
+  - name: fct_risk_segments
+    description: "Segmentacao RFM adaptada para credito"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+      - name: segment
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["champion", "loyal", "at_risk", "lost", "promising"]
+      - name: rfm_score
+        tests:
+          - not_null
+      - name: r_score
+        tests:
+          - not_null
+      - name: f_score
+        tests:
+          - not_null
+      - name: m_score
+        tests:
+          - not_null

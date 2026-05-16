@@ -1,0 +1,8 @@
+artifact_location: file:///C:/Users/lineg/credit-analytics-360/ml/mlruns/703922072848625532
+creation_time: 1778941633113
+experiment_id: '703922072848625532'
+last_update_time: 1778941633113
+lifecycle_stage: active
+name: financeflow-credit-default
+trace_location: null
+workspace: default
