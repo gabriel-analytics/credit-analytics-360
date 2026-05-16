@@ -1,0 +1,5 @@
+sources:
+  - name: financeflow
+    type: duckdb
+    options:
+      filename: ../../gen/data/financeflow.duckdb

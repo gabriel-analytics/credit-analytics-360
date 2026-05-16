@@ -1,0 +1,107 @@
+name: Credit Analytics Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dbt-pipeline:
+    name: dbt Run & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install dbt-duckdb duckdb pandas numpy pyarrow
+
+      - name: Generate synthetic dataset
+        run: python gen/data/generate_financeflow.py
+
+      - name: Update dbt profiles for CI (Linux paths)
+        run: |
+          cat > dbt_credit/profiles.yml << 'EOF'
+          financeflow:
+            target: ci
+            outputs:
+              ci:
+                type: duckdb
+                path: "/home/runner/work/credit-analytics-360/credit-analytics-360/gen/data/financeflow.duckdb"
+                threads: 2
+          EOF
+
+      - name: Update read_parquet paths for CI
+        run: |
+          DATA_DIR="/home/runner/work/credit-analytics-360/credit-analytics-360/gen/data"
+          for f in dbt_credit/models/staging/*.sql; do
+            sed -i "s|C:/Users/lineg/credit-analytics-360/gen/data|${DATA_DIR}|g" "$f"
+          done
+
+      - name: dbt deps
+        working-directory: dbt_credit
+        run: dbt deps
+
+      - name: dbt run — staging
+        working-directory: dbt_credit
+        run: dbt run --select staging.* --profiles-dir .
+
+      - name: dbt test — staging
+        working-directory: dbt_credit
+        run: dbt test --select staging.* --profiles-dir .
+
+      - name: dbt run — intermediate
+        working-directory: dbt_credit
+        run: dbt run --select intermediate.* --profiles-dir .
+
+      - name: dbt test — intermediate
+        working-directory: dbt_credit
+        run: dbt test --select intermediate.* --profiles-dir .
+
+      - name: dbt run — marts
+        working-directory: dbt_credit
+        run: dbt run --select marts.* --profiles-dir .
+
+      - name: dbt test — marts
+        working-directory: dbt_credit
+        run: dbt test --select marts.* --profiles-dir .
+
+      - name: dbt docs generate
+        working-directory: dbt_credit
+        run: dbt docs generate --profiles-dir .
+
+      - name: Report results
+        if: always()
+        run: |
+          echo "================================================"
+          echo "  CREDIT ANALYTICS 360 - PIPELINE RESULT"
+          echo "================================================"
+          echo "  Models: staging(6) + intermediate(4) + marts(5)"
+          echo "  Tests:  120 total"
+          echo "  Status: ${{ job.status }}"
+          echo "================================================"
+
+      - name: Upload dbt docs artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-docs
+          path: dbt_credit/target/
+          retention-days: 7
