@@ -1,0 +1,7 @@
+financeflow:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "C:/Users/lineg/credit-analytics-360/gen/data/financeflow.duckdb"
+      threads: 4

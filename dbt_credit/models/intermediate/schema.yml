@@ -1,0 +1,82 @@
+version: 2
+
+models:
+  - name: int_customer_credit_profile
+    description: "Perfil de crédito consolidado por cliente"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_segment
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["starter", "regular", "premium", "vip"]
+      - name: acquisition_channel
+        tests:
+          - not_null
+      - name: total_contracts
+        tests:
+          - not_null
+      - name: overall_default_rate
+        description: "Proporção de contratos em default (null se sem contratos)"
+
+  - name: int_customer_digital_behavior
+    description: "Comportamento digital mensal por cliente"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+      - name: event_month
+        tests:
+          - not_null
+      - name: logins_count
+        tests:
+          - not_null
+      - name: app_engagement_score
+        tests:
+          - not_null
+      - name: trend_30d
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["new", "growing", "stable", "declining"]
+
+  - name: int_payment_performance
+    description: "Performance de pagamentos por mês e produto"
+    columns:
+      - name: due_month
+        tests:
+          - not_null
+      - name: product_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["personal_loan", "vehicle_financing", "credit_card", "payroll_loan"]
+      - name: total_payments
+        tests:
+          - not_null
+      - name: default_rate_pct
+        tests:
+          - not_null
+      - name: recovery_rate_pct
+        tests:
+          - not_null
+
+  - name: int_acquisition_quality
+    description: "Qualidade de aquisição por canal"
+    columns:
+      - name: acquisition_channel
+        tests:
+          - not_null
+          - unique
+      - name: total_customers
+        tests:
+          - not_null
+      - name: default_rate_pct
+        tests:
+          - not_null
+      - name: avg_ticket
+        tests:
+          - not_null

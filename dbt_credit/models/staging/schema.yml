@@ -1,0 +1,190 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: "Clientes FinanceFlow Bank — Bronze → Silver"
+    columns:
+      - name: customer_id
+        description: "UUID único do cliente"
+        tests:
+          - not_null
+          - unique
+      - name: age_group
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["18-25", "26-35", "36-45", "46-60", "60+"]
+      - name: acquisition_channel
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["organic", "paid_search", "social_media", "partner", "referral"]
+      - name: customer_segment
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["starter", "regular", "premium", "vip"]
+      - name: products_count
+        tests:
+          - not_null
+      - name: is_active
+        tests:
+          - not_null
+      - name: _loaded_at
+        tests:
+          - not_null
+
+  - name: stg_contracts
+    description: "Contratos de crédito — Bronze → Silver"
+    columns:
+      - name: contract_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+      - name: product_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["personal_loan", "vehicle_financing", "credit_card", "payroll_loan"]
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["active", "settled", "defaulted", "renegotiated"]
+      - name: collateral
+        tests:
+          - accepted_values:
+              values: ["none", "vehicle", "property"]
+      - name: principal_amount
+        tests:
+          - not_null
+      - name: completion_rate
+        tests:
+          - not_null
+
+  - name: stg_payments
+    description: "Pagamentos — Bronze → Silver"
+    columns:
+      - name: payment_id
+        tests:
+          - not_null
+          - unique
+      - name: contract_id
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+      - name: payment_method
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["pix", "boleto", "debit", "auto_debit"]
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["paid_on_time", "paid_late", "pending", "defaulted"]
+      - name: lateness_bucket
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["on_time", "1-30_days", "31-60_days", "61-90_days", "90+_days"]
+      - name: amount_due
+        tests:
+          - not_null
+
+  - name: stg_app_events
+    description: "Eventos no app — Bronze → Silver"
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_id
+        tests:
+          - not_null
+      - name: event_type
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - login
+                - view_contract
+                - make_payment
+                - check_balance
+                - simulate_loan
+                - contact_support
+                - view_offer
+                - accept_offer
+                - reject_offer
+      - name: channel
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["app_ios", "app_android", "web"]
+      - name: session_duration_seconds
+        tests:
+          - not_null
+
+  - name: stg_proposals
+    description: "Propostas de crédito — Bronze → Silver"
+    columns:
+      - name: proposal_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_id
+        tests:
+          - not_null
+      - name: decision
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["approved", "rejected", "pending", "cancelled"]
+      - name: product_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["personal_loan", "vehicle_financing", "credit_card", "payroll_loan"]
+      - name: requested_amount
+        tests:
+          - not_null
+      - name: bureau_score_band
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["unknown", "very_low", "low", "medium", "high", "very_high"]
+
+  - name: stg_collections
+    description: "Ações de cobrança — Bronze → Silver"
+    columns:
+      - name: collection_id
+        tests:
+          - not_null
+          - unique
+      - name: contract_id
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+      - name: channel_used
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["sms", "email", "whatsapp", "phone", "letter"]
+      - name: overdue_bucket
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["early_1_3d", "early_4_30d", "mid_31_90d", "late_90plus"]
+      - name: days_overdue_at_trigger
+        tests:
+          - not_null
