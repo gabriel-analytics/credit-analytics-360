@@ -1,0 +1,37 @@
+# Claude Code local settings
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# dbt
+dbt_credit/target/
+dbt_credit/dbt_packages/
+dbt_credit/logs/
+
+# Data (large files — use DVC or separate storage)
+gen/data/*.parquet
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform state
+terraform/**/*.tfstate
+terraform/**/*.tfstate.backup
+terraform/**/.terraform/
+
+# Reports build output
+reports/**/*.pbix
