@@ -1,0 +1,13 @@
+{
+  "name": "credit-analytics-360-dashboard",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "evidence build",
+    "dev": "evidence dev",
+    "sources": "evidence sources"
+  },
+  "dependencies": {
+    "@evidence-dev/evidence": "^32.0.0",
+    "@evidence-dev/duckdb": "^1.0.0"
+  }
+}
