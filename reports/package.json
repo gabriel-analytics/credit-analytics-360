@@ -9,5 +9,8 @@
   "dependencies": {
     "@evidence-dev/evidence": "^32.0.0",
     "@evidence-dev/duckdb": "^1.0.0"
+  },
+  "overrides": {
+    "typescript": "^5.0.0"
   }
 }
