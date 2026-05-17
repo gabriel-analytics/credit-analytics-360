@@ -10,7 +10,8 @@ st.set_page_config(
     layout="wide"
 )
 
-DB = "C:/Users/lineg/credit-analytics-360/gen/data/financeflow.duckdb"
+import os
+DB = os.path.join(os.path.dirname(__file__), "gen", "data", "financeflow.duckdb")
 
 @st.cache_data
 def query(sql):
