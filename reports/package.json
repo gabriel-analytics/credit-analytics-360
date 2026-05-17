@@ -11,6 +11,7 @@
     "@evidence-dev/duckdb": "^1.0.0"
   },
   "overrides": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "duckdb": "^1.0.0"
   }
 }
