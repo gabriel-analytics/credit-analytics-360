@@ -174,19 +174,30 @@ with tab3:
         st.plotly_chart(fig5, use_container_width=True)
 
     with col2:
-        st.subheader("LTV por Segmento")
+        st.subheader("LTV Médio por Segmento")
         ltv = query("""
-            SELECT ltv_segment,
+            SELECT
+                ltv_segment,
+                round(avg(realized_ltv), 0) AS ltv_medio,
                 count(*) AS clientes
             FROM main_marts.fct_customer_ltv
             GROUP BY ltv_segment
-            ORDER BY clientes DESC
+            ORDER BY ltv_medio DESC
         """)
-        fig6 = px.bar(ltv, x='ltv_segment', y='clientes',
-                      text='clientes',
-                      title='Clientes por Segmento de LTV',
-                      color='clientes',
-                      color_continuous_scale='Blues')
+        ltv['cor'] = ltv['ltv_medio'].apply(
+            lambda v: '#22c55e' if v >= 0 else '#ef4444'
+        )
+        fig6 = px.bar(
+            ltv, x='ltv_segment', y='ltv_medio',
+            text=ltv['ltv_medio'].apply(lambda v: f"R$ {int(v):,}"),
+            title='LTV Médio Realizado por Segmento (R$)',
+            color='ltv_medio',
+            color_continuous_scale='RdYlGn',
+            labels={'ltv_segment': 'Segmento', 'ltv_medio': 'LTV Médio (R$)'},
+            category_orders={'ltv_segment': ['champion', 'high', 'medium', 'low']}
+        )
+        fig6.update_traces(textposition='outside')
+        fig6.add_hline(y=0, line_dash='dash', line_color='gray', opacity=0.5)
         st.plotly_chart(fig6, use_container_width=True)
 
     st.subheader("Qualidade por Canal de Aquisição")
