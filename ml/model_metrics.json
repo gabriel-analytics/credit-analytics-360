@@ -1,53 +1,56 @@
 {
-  "model_name": "RandomForest",
-  "accuracy": 0.9953,
-  "precision": 0.7143,
-  "recall": 0.9735,
-  "f1_score": 0.824,
-  "auc_roc": 0.9992,
+  "model_name": "LogisticRegression",
+  "accuracy": 0.6292,
+  "precision": 0.1482,
+  "recall": 0.6002,
+  "f1_score": 0.2377,
+  "auc_roc": 0.668,
   "top_features": [
     {
-      "feature": "overall_default_rate",
-      "importance": 0.2767
+      "feature": "total_payments_hist",
+      "importance": 0.5089
     },
     {
-      "feature": "app_engagement_score",
-      "importance": 0.1193
+      "feature": "late_rate_hist",
+      "importance": 0.2157
     },
     {
-      "feature": "products_count",
-      "importance": 0.0546
+      "feature": "late_count_hist",
+      "importance": 0.2046
     },
     {
-      "feature": "total_contracts",
-      "importance": 0.0431
+      "feature": "total_contracts_hist",
+      "importance": 0.1521
     },
     {
-      "feature": "acquisition_channel_paid_search",
-      "importance": 0.0166
+      "feature": "avg_days_late_hist",
+      "importance": 0.092
     },
     {
-      "feature": "income_declared",
-      "importance": 0.0156
+      "feature": "avg_completion_rate",
+      "importance": 0.0738
     },
     {
-      "feature": "avg_days_late",
-      "importance": 0.0067
+      "feature": "max_days_late_hist",
+      "importance": 0.0694
     },
     {
-      "feature": "days_since_last_login",
-      "importance": 0.0057
+      "feature": "has_collateral",
+      "importance": 0.061
     },
     {
-      "feature": "acquisition_channel_referral",
-      "importance": 0.0041
+      "feature": "total_debt_hist",
+      "importance": 0.0457
     },
     {
       "feature": "age_group_26-35",
-      "importance": 0.0033
+      "importance": 0.0358
     }
   ],
   "train_samples": 40000,
   "test_samples": 10000,
-  "target_positive_rate": 0.0113
+  "target_positive_rate": 0.0963,
+  "leakage_corrected": true,
+  "cutoff_date": "2024-06-30",
+  "target_window": "2024-07-01 to 2024-09-30"
 }

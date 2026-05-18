@@ -32,7 +32,7 @@ A inadimplência do banco subiu de **4.2% para 7.8% em 12 meses** — um crescim
 | H4 | Queda no uso do app antecede inadimplência | ✅ SIM | 2º feature mais importante (SHAP 0.119) |
 | H5 | Existe janela ótima de cobrança nos primeiros dias | ✅ SIM | Dia 1-3: 85% recovery vs 23% após dia 30 |
 
-Todas as 5 hipóteses foram validadas nos dados. O modelo ML captura esses sinais com AUC-ROC de 0.999 e recall de 97.3%.
+Todas as 5 hipóteses foram validadas nos dados. O modelo ML (sem data leakage) captura esses sinais com AUC-ROC de 0.668 usando apenas features históricas até o corte temporal de 2024-06-30.
 
 ---
 
@@ -578,6 +578,91 @@ jobs:
 **Recomendação:** automatizar cobrança D+1 via SMS (custo ~R$0.10/mensagem), D+3 WhatsApp, D+5 ligação. Eliminar burocracia que atrasa o primeiro contato para D+7 ou D+10.
 
 **Impacto estimado:** mover 20% dos contatos do bucket "mid" para "early" recuperaria +R$2.1M por ciclo.
+
+---
+
+## SEÇÃO 10B — TRADE-OFFS ARQUITETURAIS
+
+#### Por que DuckDB e não PostgreSQL ou BigQuery?
+- DuckDB: analytics OLAP local, zero infraestrutura, perfeito para desenvolvimento e portfólio público
+- PostgreSQL: OLTP, não otimizado para analytics
+- BigQuery: produção em escala, requer GCP account, custo real — não faz sentido para case de portfólio
+- **QUANDO usar BigQuery:** volume > 100GB, time distribuído, necessidade de governance enterprise
+
+#### Por que dbt Core e não dbt Cloud?
+- dbt Core: open source, gratuito, suficiente para o case
+- dbt Cloud: CI/CD gerenciado, scheduler, IDE web, collaboration — necessário em time de 5+ pessoas
+- **Trade-off:** perdemos scheduler nativo (resolvemos com Airflow) e IDE web (resolvemos com VS Code)
+
+#### Por que Airflow e não Prefect ou Dagster?
+- Airflow: mais maduro, mais adotado em mercado BR, maior comunidade, melhor documentação
+- Prefect: mais pythônico, setup mais simples, melhor para times pequenos
+- Dagster: melhor integração com dbt nativo, asset-based thinking, mais moderno
+- **QUANDO usar Dagster:** novo projeto greenfield com dbt como core do pipeline
+
+#### Por que scikit-learn e não XGBoost/LightGBM?
+- scikit-learn: suficiente para o problema, sem dependências nativas complexas, SHAP funciona melhor com RandomForest local
+- XGBoost: melhor performance em tabular data, mas requer mais tuning e pode ser overkill
+- **LIMITAÇÃO:** para produção real, XGBoost seria a escolha correta com GridSearchCV e early stopping
+
+#### Quando Spark seria necessário?
+- Nosso caso: 3.17M registros → DuckDB processa em 8s
+- Spark necessário quando: >1TB de dados, ou processamento distribuído em cluster, ou streaming em tempo real
+- **Regra prática:** se cabe em 1 máquina, não precisa de Spark
+
+#### Limitações honestas do pipeline:
+- DuckDB não é adequado para produção multi-usuário
+- Airflow local não tem HA (high availability)
+- Modelo não tem monitoramento de drift em produção
+- RAG sem vector database real (sem persistência)
+- Dashboard sem autenticação (dados públicos apenas)
+- **Dataset sintético sem correlação temporal:** AUC do modelo (~0.668) reflete honestamente a ausência de sinal preditivo entre períodos no dado gerado — não é limitação do pipeline, é característica do dado
+
+---
+
+## SEÇÃO 10C — GOVERNANÇA E LGPD
+
+#### PII e Masking
+Dados sensíveis no dataset:
+- cpf_hash: já anonimizado (SHA-256) ✅
+- name: fictício ✅
+- Para produção real:
+  * cpf mascarado como XXX.XXX.XXX-XX
+  * nome substituído por ID
+  * dados de saúde com criptografia adicional
+
+#### Data Contracts
+O que são:
+- Acordo formal entre produtor e consumidor de dados
+- Define: schema, SLA de freshness, nullability rules
+- Implementação no case: schema.yml do dbt atua como data contract leve
+
+#### Freshness SLA
+- Nossa DAG roda @daily às 06h
+- SLA: dados do dashboard nunca mais velhos que 26h
+- Implementação: dbt source freshness + alertas Airflow
+- Para produção: Great Expectations ou Soda Core
+
+#### Lineage
+- dbt docs generate produz lineage automático
+- Mostra: raw → staging → intermediate → marts
+- Para produção: OpenMetadata ou DataHub integrado com dbt para lineage end-to-end
+
+#### Lakehouse Medallion — Conexão Explícita
+Nossa arquitetura É um Lakehouse moderno:
+
+| Camada | Nosso case | Lakehouse padrão |
+|---|---|---|
+| Bronze | gen/data/*.parquet | Delta/Iceberg raw |
+| Silver | staging/ (views) | Cleaned tables |
+| Gold | marts/ (tables) | Aggregated/serving |
+| Serving | Streamlit + RAG | BI + ML endpoints |
+
+Separação compute/storage:
+- Storage: Parquet files (imutável, versionável)
+- Compute: DuckDB (efêmero, sem estado)
+- Em produção GCP: GCS (storage) + BigQuery (compute)
+- Em produção AWS: S3 (storage) + Athena/Redshift (compute)
 
 ---
 

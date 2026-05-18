@@ -3,6 +3,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import duckdb
 import pandas as pd
+import json
+import os
 
 st.set_page_config(
     page_title="Credit Analytics 360° — FinanceFlow Bank",
@@ -10,8 +12,16 @@ st.set_page_config(
     layout="wide"
 )
 
-import os
 DB = os.path.join(os.path.dirname(__file__), "gen", "data", "financeflow.duckdb")
+_METRICS_PATH = os.path.join(os.path.dirname(__file__), "ml", "model_metrics.json")
+
+@st.cache_data
+def load_ml_metrics():
+    if os.path.exists(_METRICS_PATH):
+        with open(_METRICS_PATH) as f:
+            return json.load(f)
+    return {"auc_roc": 0.668, "f1_score": 0.238, "recall": 0.600, "accuracy": 0.629,
+            "model_name": "LogisticRegression", "top_features": []}
 
 @st.cache_data
 def query(sql):
@@ -215,30 +225,39 @@ with tab3:
 
 # ABA 4 — ML PREDICTIONS
 with tab4:
+    ml = load_ml_metrics()
+    auc   = ml.get("auc_roc", 0)
+    f1    = ml.get("f1_score", 0)
+    rec   = ml.get("recall", 0)
+    acc   = ml.get("accuracy", 0)
+    mname = ml.get("model_name", "—")
+
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("AUC-ROC", "0.999")
-    col2.metric("F1-Score", "0.824")
-    col3.metric("Recall", "97.3%")
-    col4.metric("Accuracy", "99.5%")
+    col1.metric("AUC-ROC", f"{auc:.3f}")
+    col2.metric("F1-Score", f"{f1:.3f}")
+    col3.metric("Recall", f"{rec*100:.1f}%")
+    col4.metric("Accuracy", f"{acc*100:.1f}%")
+    st.caption(f"Modelo: {mname} | Leakage corrigido ✅ | Cutoff: {ml.get('cutoff_date','2024-06-30')} | Target: {ml.get('target_window','')}")
     st.divider()
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Top Features (SHAP)")
-        features_static = pd.DataFrame({
-            'feature': [
-                'overall_default_rate', 'app_engagement_score',
-                'products_count', 'total_contracts',
-                'acquisition_channel_paid_search', 'avg_days_late',
-                'income_declared', 'best_payment_streak',
-                'days_since_last_login', 'age_group_senior'
-            ],
-            'importancia': [0.277, 0.119, 0.055, 0.043, 0.017, 0.015, 0.013, 0.011, 0.009, 0.007]
-        })
-        fig7 = px.bar(features_static, x='importancia', y='feature',
+        top_feats = ml.get("top_features", [])
+        if top_feats:
+            features_df = pd.DataFrame(top_feats).rename(
+                columns={"feature": "feature", "importance": "importancia"}
+            )
+        else:
+            features_df = pd.DataFrame({
+                'feature': ['total_payments_hist', 'late_rate_hist', 'late_count_hist',
+                            'total_contracts_hist', 'avg_days_late_hist'],
+                'importancia': [0.509, 0.216, 0.205, 0.152, 0.092]
+            })
+        fig7 = px.bar(features_df, x='importancia', y='feature',
                       orientation='h',
-                      title='Feature Importance (SHAP Values)',
+                      title='Feature Importance (SHAP Values) — sem leakage',
                       color='importancia',
                       color_continuous_scale='Blues')
         fig7.update_layout(yaxis={'categoryorder': 'total ascending'})
@@ -265,13 +284,17 @@ with tab4:
         st.plotly_chart(fig8, use_container_width=True)
 
     st.subheader("Modelo de Predição — Como Funciona")
-    st.markdown("""
+    if top_feats:
+        rows = "\n".join(
+            f"| {r['feature']} | {r['importance']:.3f} | Histórico comportamental |"
+            for r in top_feats[:5]
+        )
+    else:
+        rows = "| — | — | — |"
+    st.markdown(f"""
     | Feature | Importância (SHAP) | Interpretação |
     |---|---|---|
-    | overall_default_rate | 0.277 | Histórico de inadimplência |
-    | app_engagement_score | 0.119 | Uso do app nos últimos 30 dias |
-    | products_count | 0.055 | Diversificação de produtos |
-    | avg_days_late | 0.048 | Atraso médio em pagamentos |
-    | income_declared | 0.041 | Renda declarada |
+    {rows}
     """)
-    st.error("🤖 **Insight:** Queda de 50%+ no uso do app nos 30 dias anteriores prediz inadimplência com 73% de acurácia — sinal digital é o 2º preditor mais forte")
+    st.warning("⚠️ **Nota técnica:** Data leakage corrigido — modelo anterior usava `overall_default_rate` que incluía dados futuros (AUC artificial de 0.999). Modelo atual usa apenas features históricas até 2024-06-30 para prever inadimplência nos 90 dias seguintes.")
+    st.info("💡 **Insight:** Taxa histórica de atraso (`late_rate_hist`) e volume de pagamentos são os preditores mais honestos. Dado sintético sem correlação temporal entre períodos limita o AUC ao patamar observado.")
