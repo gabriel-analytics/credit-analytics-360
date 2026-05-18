@@ -75,9 +75,12 @@ with tab1:
 
     st.subheader("Default Rate por Produto")
     prod = query("""
-        SELECT product_type,
-            round(avg(default_rate_pct), 2) AS default_pct
+        SELECT
+            product_type,
+            round(avg(default_rate_pct), 2) AS default_pct,
+            count(*) AS total_contratos
         FROM main_intermediate.int_payment_performance
+        WHERE product_type IS NOT NULL
         GROUP BY product_type
         ORDER BY default_pct DESC
     """)
