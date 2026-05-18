@@ -80,6 +80,30 @@ Acionar cobrança nos primeiros 7 dias garante **65-70% de recuperação**. Apó
 
 ---
 
+## 📊 Dashboard
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://credit-analytics-360.streamlit.app/)
+
+> Dashboard interativo com dados reais do pipeline dbt + DuckDB
+
+---
+
+## 📸 Screenshots
+
+### Portfolio Overview
+![Portfolio Overview](reports/dashboard-images/01-portfolio-overviiew.png)
+
+### Risk Analytics
+![Risk Analytics](reports/dashboard-images/02-risk-analytics.png)
+
+### Customer Segments
+![Customer Segments](reports/dashboard-images/03-customer-segments.png)
+
+### ML Predictions
+![ML Predictions](reports/dashboard-images/04-ml-prediction.png)
+
+---
+
 ## Como Rodar Localmente / Running Locally
 
 ### Pré-requisitos
