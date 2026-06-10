@@ -1,0 +1,26 @@
+stages:
+  generate_data:
+    cmd: python gen/generate_data.py
+    deps:
+      - gen/generate_data.py
+    outs:
+      - gen/data/customers.parquet
+      - gen/data/contracts.parquet
+      - gen/data/payments.parquet
+      - gen/data/app_events.parquet
+      - gen/data/proposals.parquet
+      - gen/data/collections.parquet
+
+  train_model:
+    cmd: python ml/credit_score_model.py
+    deps:
+      - ml/credit_score_model.py
+      - gen/data/customers.parquet
+      - gen/data/contracts.parquet
+      - gen/data/payments.parquet
+    outs:
+      - ml/credit_model.pkl
+      - ml/feature_pipeline.pkl
+    metrics:
+      - ml/metrics.json:
+          cache: false
