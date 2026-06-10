@@ -1,0 +1,5 @@
+outs:
+- md5: aa58c8017c5064fb6577c241fd776b9e
+  size: 10025512
+  hash: md5
+  path: contracts.parquet

@@ -1,0 +1,5 @@
+outs:
+- md5: 4b2db7436f94b867ef8f38a1537be8cb
+  size: 17238993
+  hash: md5
+  path: proposals.parquet

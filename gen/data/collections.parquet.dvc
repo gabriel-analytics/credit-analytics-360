@@ -1,0 +1,5 @@
+outs:
+- md5: fa96186fca369f679fef360d0af2939e
+  size: 1882633
+  hash: md5
+  path: collections.parquet

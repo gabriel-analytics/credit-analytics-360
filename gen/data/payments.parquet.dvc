@@ -1,0 +1,5 @@
+outs:
+- md5: a48fc4a8ecfc063e1d46c838a2d08814
+  size: 96563546
+  hash: md5
+  path: payments.parquet
