@@ -1,0 +1,5 @@
+outs:
+- md5: 7852acf83048348ca7bf1d6591a8a1b7
+  size: 4407
+  hash: md5
+  path: feature_pipeline.pkl
