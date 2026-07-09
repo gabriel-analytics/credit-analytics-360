@@ -8,8 +8,9 @@ import json
 import duckdb
 import anthropic
 from datetime import datetime
+from pathlib import Path
 
-DB_PATH = "C:/Users/lineg/credit-analytics-360/gen/data/financeflow.duckdb"
+DB_PATH = str(Path(__file__).resolve().parent.parent / "gen" / "data" / "financeflow.duckdb")
 
 # Schema summary injected as context
 SCHEMA_CONTEXT = """
@@ -46,11 +47,11 @@ INSIGHTS CONHECIDOS DO DATASET:
 1. Inadimplência sobe ~31% em jan/fev (sazonalidade pós-festas)
 2. paid_search tem 2.1x mais inadimplência que organic (9.73% vs 4.62%)
 3. Clientes com 2+ produtos têm inadimplência 60% menor e LTV 4x maior
-4. Queda >50% no uso do app nos 30 dias anteriores prediz inadimplência (73% acurácia)
+4. Queda >50% no uso do app nos 30 dias anteriores correlaciona com inadimplência (73% de acurácia na análise exploratória — não é uma feature do modelo de produção)
 5. vehicle_financing tem menor inadimplência (5.50%), personal_loan a maior (5.66%)
 6. Contato no dia 1-7 de atraso: 65-70% recuperação. Após 30 dias: <25%
 7. 565 clientes estão atualmente em alert_30d = true
-8. Modelo ML: AUC=0.999, F1=0.824, Recall=0.973
+8. Modelo ML de produção: Logistic Regression (venceu Random Forest por F1), sem data leakage — AUC=0.666, F1=0.237, Recall=0.593, Precision=0.148. Top features: total_payments_hist, late_count_hist, late_rate_hist (todas históricas, sem dados do período previsto)
 
 REGRAS PARA GERAR SQL:
 - Usar sempre schema qualificado: main_marts.fct_credit_score

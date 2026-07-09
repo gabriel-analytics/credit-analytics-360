@@ -1,5 +1,5 @@
 with source as (
-    select * from read_parquet('C:/Users/lineg/credit-analytics-360/gen/data/customers.parquet')
+    select * from read_parquet('C:/Users/lineg/projects/credit-analytics-360/gen/data/customers.parquet')
 ),
 
 renamed as (

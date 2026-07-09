@@ -58,35 +58,78 @@ print("MLflow tracking URI:", mlflow.get_tracking_uri())
 # Para demo local: DuckDB lê direto do arquivo
 
 import duckdb
+from pathlib import Path
 
-DB_PATH = "C:/Users/lineg/credit-analytics-360/gen/data/financeflow.duckdb"
+DB_PATH = str(Path(__file__).resolve().parent.parent / "gen" / "data" / "financeflow.duckdb")
 con = duckdb.connect(DB_PATH, read_only=True)
 
+# NOTA (2026-07): esta query foi reescrita para eliminar data leakage —
+# a versao original usava cs.overall_default_rate/app_engagement_score,
+# que sao derivados do MESMO periodo que o target tenta prever. Agora usa
+# apenas features historicas ate o corte de 2024-06-30, igual ao
+# credit_score_model.py (fonte da verdade do pipeline de ML).
 query = """
+WITH pagamentos_hist AS (
+    SELECT
+        customer_id,
+        count(*)                                              as total_payments_hist,
+        count(case when is_late then 1 end)                  as late_count_hist,
+        max(days_late)                                        as max_days_late_hist,
+        avg(days_late)                                        as avg_days_late_hist,
+        round(count(case when is_late then 1 end) * 1.0 /
+              nullif(count(*), 0), 4)                        as late_rate_hist
+    FROM main_staging.stg_payments
+    WHERE due_date <= '2024-06-30'
+    GROUP BY customer_id
+),
+contratos_hist AS (
+    SELECT
+        customer_id,
+        count(*)                                              as total_contracts_hist,
+        sum(principal_amount)                                 as total_debt_hist,
+        avg(completion_rate)                                  as avg_completion_rate,
+        max(case when has_collateral then 1 else 0 end)      as has_collateral
+    FROM main_staging.stg_contracts
+    WHERE contract_date <= '2024-06-30'
+    GROUP BY customer_id
+),
+target AS (
+    SELECT
+        customer_id,
+        max(case when due_date > '2024-06-30'
+                 and due_date <= '2024-09-30'
+                 and days_late >= 30 then 1 else 0 end) as defaulted_after
+    FROM main_staging.stg_payments
+    GROUP BY customer_id
+)
 SELECT
-    cs.customer_id,
-    cs.alert_30d,
-    coalesce(cs.overall_default_rate, 0)   as overall_default_rate,
-    coalesce(cs.avg_days_late, 0)          as avg_days_late,
-    coalesce(cs.app_engagement_score, 0)   as app_engagement_score,
-    coalesce(cs.days_since_last_login, 30) as days_since_last_login,
-    coalesce(cs.products_count, 1)         as products_count,
-    coalesce(cs.best_payment_streak, 0)    as best_payment_streak,
-    coalesce(cs.total_contracts, 0)        as total_contracts,
-    coalesce(c.income_declared, 0)         as income_declared,
-    cs.acquisition_channel,
-    cs.age_group,
-    cs.customer_segment
-FROM main_marts.fct_credit_score cs
-LEFT JOIN main_staging.stg_customers c USING (customer_id)
-WHERE cs.customer_id IS NOT NULL
+    c.customer_id,
+    c.acquisition_channel,
+    c.age_group,
+    coalesce(c.income_declared, 0)                       as income_declared,
+    c.products_count,
+    coalesce(p.total_payments_hist, 0)                   as total_payments_hist,
+    coalesce(p.late_count_hist, 0)                       as late_count_hist,
+    coalesce(p.max_days_late_hist, 0)                    as max_days_late_hist,
+    coalesce(p.avg_days_late_hist, 0)                    as avg_days_late_hist,
+    coalesce(p.late_rate_hist, 0)                        as late_rate_hist,
+    coalesce(ct.total_contracts_hist, 0)                 as total_contracts_hist,
+    coalesce(ct.total_debt_hist, 0)                      as total_debt_hist,
+    coalesce(ct.avg_completion_rate, 0)                  as avg_completion_rate,
+    coalesce(ct.has_collateral, 0)                       as has_collateral,
+    coalesce(t.defaulted_after, 0)                       as target
+FROM main_staging.stg_customers c
+LEFT JOIN pagamentos_hist p  ON c.customer_id = p.customer_id
+LEFT JOIN contratos_hist  ct ON c.customer_id = ct.customer_id
+LEFT JOIN target          t  ON c.customer_id = t.customer_id
 """
 
 df = con.execute(query).df()
 con.close()
+df = df.fillna(0)
 
 print(f"Dataset: {len(df):,} registros")
-print(f"Target distribution:\n{df['alert_30d'].value_counts()}")
+print(f"Target distribution:\n{df['target'].value_counts()}")
 
 # No Databricks real, usar display() ao invés de print():
 # display(df.head(10))
@@ -95,17 +138,18 @@ print(f"Target distribution:\n{df['alert_30d'].value_counts()}")
 # Cell 3: Feature engineering
 
 NUMERIC_FEATURES = [
-    "overall_default_rate", "avg_days_late", "app_engagement_score",
-    "days_since_last_login", "products_count", "income_declared",
-    "best_payment_streak", "total_contracts",
+    "income_declared", "products_count", "total_payments_hist",
+    "late_count_hist", "max_days_late_hist", "avg_days_late_hist",
+    "late_rate_hist", "total_contracts_hist", "total_debt_hist",
+    "avg_completion_rate", "has_collateral",
 ]
 
 CATEGORICAL_FEATURES = [
-    "acquisition_channel", "age_group", "customer_segment",
+    "acquisition_channel", "age_group",
 ]
 
 X = df[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
-y = df["alert_30d"].astype(int)
+y = df["target"].astype(int)
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
@@ -164,7 +208,7 @@ with mlflow.start_run(run_name="credit_default_rf_v1") as run:
     mlflow.log_metrics(metrics)
     mlflow.set_tag("stage", "staging")
     mlflow.set_tag("bank", "FinanceFlow")
-    mlflow.set_tag("target", "alert_30d")
+    mlflow.set_tag("target", "defaulted_90d_after_cutoff")
 
     # Log feature importances como artefato
     model = pipeline.named_steps["clf"]
@@ -238,20 +282,22 @@ loaded_model = mlflow.sklearn.load_model(model_uri)
 # Simular clientes para scoring
 example_customers = pd.DataFrame([
     {
-        "overall_default_rate": 0.0,  "avg_days_late": 0,
-        "app_engagement_score": 80,   "days_since_last_login": 2,
-        "products_count": 3,          "income_declared": 8500,
-        "best_payment_streak": 12,    "total_contracts": 2,
-        "acquisition_channel": "organic",
-        "age_group": "26-35",         "customer_segment": "premium",
+        "income_declared": 8500,       "products_count": 3,
+        "total_payments_hist": 24,     "late_count_hist": 0,
+        "max_days_late_hist": 0,       "avg_days_late_hist": 0,
+        "late_rate_hist": 0.0,         "total_contracts_hist": 2,
+        "total_debt_hist": 15000,      "avg_completion_rate": 0.95,
+        "has_collateral": 1,
+        "acquisition_channel": "organic", "age_group": "26-35",
     },
     {
-        "overall_default_rate": 0.6,  "avg_days_late": 45,
-        "app_engagement_score": 12,   "days_since_last_login": 28,
-        "products_count": 1,          "income_declared": 1200,
-        "best_payment_streak": 1,     "total_contracts": 1,
-        "acquisition_channel": "paid_search",
-        "age_group": "36-45",         "customer_segment": "starter",
+        "income_declared": 1200,       "products_count": 1,
+        "total_payments_hist": 6,      "late_count_hist": 4,
+        "max_days_late_hist": 45,      "avg_days_late_hist": 22,
+        "late_rate_hist": 0.6,         "total_contracts_hist": 1,
+        "total_debt_hist": 3000,       "avg_completion_rate": 0.3,
+        "has_collateral": 0,
+        "acquisition_channel": "paid_search", "age_group": "36-45",
     },
 ])
 
@@ -270,15 +316,22 @@ for i, (pred, prob) in enumerate(zip(predictions, probabilities)):
 # MAGIC
 # MAGIC | Metrica   | Valor  |
 # MAGIC |-----------|--------|
-# MAGIC | AUC-ROC   | 0.999  |
-# MAGIC | F1-Score  | 0.824  |
-# MAGIC | Recall    | 0.973  |
-# MAGIC | Precision | 0.714  |
+# MAGIC | Modelo    | RandomForest (leakage-corrected) |
+# MAGIC | AUC-ROC   | 0.668  |
+# MAGIC | F1-Score  | 0.236  |
+# MAGIC | Recall    | 0.626  |
+# MAGIC | Precision | 0.145  |
 # MAGIC
-# MAGIC **Top Features:** overall_default_rate, app_engagement_score, products_count
+# MAGIC **Nota:** este notebook treina um RandomForest separadamente (para
+# MAGIC demonstrar o padrão MLflow/Databricks); o modelo escolhido para produção
+# MAGIC é decidido em `ml/credit_score_model.py`, que compara RandomForest e
+# MAGIC Logistic Regression e seleciona o de melhor F1 (ver README e
+# MAGIC docs/APRESENTACAO_TECNICA.md). Os números dos dois ficam na mesma faixa
+# MAGIC honesta (~0.66-0.68 AUC), como esperado para este dataset sintético.
 # MAGIC
-# MAGIC > Recall de 97.3% significa que o modelo captura 97 de cada 100 clientes
-# MAGIC > que entrarão em default — fundamental para acionar cobrança proativa.
+# MAGIC > Recall de 62.6% significa que o modelo captura ~63 de cada 100 clientes
+# MAGIC > que entrarão em default, usando apenas dados históricos até o corte —
+# MAGIC > fundamental para acionar cobrança proativa sem vazar dados do futuro.
 
 print("\nNotebook Databricks executado com sucesso!")
 print(f"MLflow runs em: ml/mlruns/")

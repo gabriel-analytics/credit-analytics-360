@@ -1,50 +1,50 @@
 {
   "model_name": "LogisticRegression",
-  "accuracy": 0.6292,
-  "precision": 0.1482,
-  "recall": 0.6002,
-  "f1_score": 0.2377,
-  "auc_roc": 0.668,
+  "accuracy": 0.6258,
+  "precision": 0.1471,
+  "recall": 0.6012,
+  "f1_score": 0.2363,
+  "auc_roc": 0.6611,
   "top_features": [
     {
       "feature": "total_payments_hist",
-      "importance": 0.5089
-    },
-    {
-      "feature": "late_rate_hist",
-      "importance": 0.2157
+      "importance": 0.5074
     },
     {
       "feature": "late_count_hist",
-      "importance": 0.2046
+      "importance": 0.2114
+    },
+    {
+      "feature": "late_rate_hist",
+      "importance": 0.2069
     },
     {
       "feature": "total_contracts_hist",
-      "importance": 0.1521
+      "importance": 0.15
     },
     {
       "feature": "avg_days_late_hist",
-      "importance": 0.092
+      "importance": 0.0814
     },
     {
       "feature": "avg_completion_rate",
-      "importance": 0.0738
-    },
-    {
-      "feature": "max_days_late_hist",
-      "importance": 0.0694
+      "importance": 0.0711
     },
     {
       "feature": "has_collateral",
-      "importance": 0.061
+      "importance": 0.0697
+    },
+    {
+      "feature": "max_days_late_hist",
+      "importance": 0.0656
     },
     {
       "feature": "total_debt_hist",
-      "importance": 0.0457
+      "importance": 0.0357
     },
     {
-      "feature": "age_group_26-35",
-      "importance": 0.0358
+      "feature": "bureau_score",
+      "importance": 0.0283
     }
   ],
   "train_samples": 40000,

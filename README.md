@@ -4,7 +4,7 @@
 ![dbt](https://img.shields.io/badge/dbt-1.11-orange?logo=dbt)
 ![DuckDB](https://img.shields.io/badge/DuckDB-1.10-yellow?logo=duckdb)
 ![Airflow](https://img.shields.io/badge/Airflow-2.8-green?logo=apache-airflow)
-![scikit-learn](https://img.shields.io/badge/scikit--learn-RF%20AUC%3D0.999-red?logo=scikit-learn)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-LogReg%20AUC%3D0.666-red?logo=scikit-learn)
 ![MLflow](https://img.shields.io/badge/MLflow-tracked-blue?logo=mlflow)
 ![Evidence.dev](https://img.shields.io/badge/Evidence.dev-dashboard-purple)
 ![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-black?logo=github-actions)
@@ -52,9 +52,9 @@
                │                    │
     ┌──────────▼──────┐  ┌─────────▼─────────────────────┐
     │  ML (Dia 3)     │  │  PRODUTO (Dia 4)               │
-    │  RandomForest   │  │  Evidence.dev (4 páginas)      │
-    │  AUC = 0.999    │  │  RAG Agent (Claude claude-sonnet-4-6)    │
-    │  Recall = 0.973 │  │  GitHub Actions CI/CD          │
+    │  LogisticReg    │  │  Evidence.dev (4 páginas)      │
+    │  AUC = 0.666    │  │  RAG Agent (Claude claude-sonnet-4-6)    │
+    │  Recall = 0.593 │  │  GitHub Actions CI/CD          │
     │  MLflow tracked │  │  Vercel Deploy                 │
     └─────────────────┘  └───────────────────────────────┘
 ```
@@ -73,7 +73,7 @@ Clientes adquiridos via `paid_search` apresentam **9.73% de default** vs **4.62%
 Clientes com 2+ produtos têm inadimplência **60% menor** e LTV **4x maior**. O produto certo no momento certo é a maior alavanca de rentabilidade.
 
 ### 4. App como Sensor de Risco
-Queda de >50% no uso do app nos 30 dias anteriores prediz inadimplência com **73% de acurácia**. O modelo captura este sinal com recall de **97.3%** — identificando 97 de cada 100 futuros inadimplentes.
+Queda de >50% no uso do app nos 30 dias anteriores prediz inadimplência com **73% de acurácia** (correlação observada na análise exploratória). O modelo de produção (Logistic Regression, sem data leakage) captura esse tipo de sinal com recall de **59.3%** — identificando ~59 de cada 100 futuros inadimplentes usando apenas dados históricos até a data de corte.
 
 ### 5. Janela de Cobrança: Dias 1-7 Valem Ouro
 Acionar cobrança nos primeiros 7 dias garante **65-70% de recuperação**. Após 30 dias, a taxa cai para **<25%**. Cada dia de atraso no protocolo custa ~3 pontos percentuais de recuperação.
@@ -167,7 +167,7 @@ credit-analytics-360/
 │   ├── credit_score_model.py    # RF + LogReg + SHAP
 │   ├── databricks_notebook.py   # Simulação MLflow/Databricks
 │   ├── credit_model.pkl         # Modelo serializado
-│   └── model_metrics.json       # AUC=0.999, F1=0.824
+│   └── model_metrics.json       # AUC=0.666, F1=0.237 (leakage-corrected)
 ├── rag/                         # RAG Agent com Claude API
 │   └── credit_analyst_agent.py  # Perguntas em linguagem natural
 ├── reports/                     # Evidence.dev dashboard
@@ -196,7 +196,7 @@ credit-analytics-360/
 | Data Warehouse | DuckDB 1.10 | Engine analítico local |
 | Transformation | dbt 1.11 + dbt-duckdb | 15 modelos, 120 testes |
 | Orchestration | Apache Airflow 2.8 | Pipeline @daily, 9 tasks |
-| ML | scikit-learn + SHAP | RF AUC=0.999, recall=0.973 |
+| ML | scikit-learn + SHAP | LogReg AUC=0.666, recall=0.593 (leakage-corrected) |
 | ML Tracking | MLflow | Experiment tracking + Registry |
 | Dashboard | Evidence.dev | 4 páginas analíticas |
 | AI/RAG | Claude claude-sonnet-4-6 (Anthropic) | Análise em linguagem natural |
@@ -214,10 +214,15 @@ credit-analytics-360/
 | Modelos dbt | 15 (6+4+5) |
 | Testes dbt | 120 passando |
 | Tempo de execução dbt | 8.72s |
-| AUC-ROC do modelo | 0.999 |
-| F1-Score | 0.824 |
-| Recall (captura de inadimplentes) | 97.3% |
+| Modelo vencedor | Logistic Regression |
+| AUC-ROC do modelo | 0.666 |
+| F1-Score | 0.237 |
+| Precision | 14.8% |
+| Recall (captura de inadimplentes) | 59.3% |
+| Accuracy | 62.9% |
 | Clientes em alerta 30d | 565 |
+
+> **Nota de metodologia:** a primeira versão do modelo (Random Forest) apresentava AUC=0.999 por data leakage — a feature `risk_tier` era derivada dos mesmos componentes que compunham o target. Corrigido usando apenas features históricas até a data de corte (2024-06-30) com split temporal treino/teste (nunca aleatório). Com o leakage removido, Logistic Regression superou Random Forest e o AUC honesto caiu para ~0.666 — valor consistente com a ausência de autocorrelação temporal real nos dados sintéticos gerados. Ver `docs/APRESENTACAO_TECNICA.md` para a análise completa do trade-off.
 
 ---
 

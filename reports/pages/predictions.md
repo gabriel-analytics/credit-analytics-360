@@ -8,12 +8,12 @@ title: ML Predictions — FinanceFlow Bank
 
 ```sql model_metrics_placeholder
 select
-  'RandomForest' as modelo,
-  0.824 as f1_score,
-  0.999 as auc_roc,
-  0.973 as recall,
-  0.714 as precision,
-  0.995 as accuracy,
+  'Logistic Regression' as modelo,
+  0.237 as f1_score,
+  0.666 as auc_roc,
+  0.593 as recall,
+  0.148 as precision,
+  0.629 as accuracy,
   40000 as amostras_treino,
   10000 as amostras_teste
 ```
@@ -23,8 +23,13 @@ select
 <BigValue data={model_metrics_placeholder} value=recall title="Recall" fmt="0.000" />
 <BigValue data={model_metrics_placeholder} value=precision title="Precision" fmt="0.000" />
 
-> **Recall de 97.3%** significa que o modelo captura **97 de cada 100 clientes** que 
-> entrarão em default — fundamental para acionar cobrança proativa no momento certo.
+> **Nota de metodologia:** a primeira versão deste modelo apresentava AUC=0.999 por
+> data leakage (feature derivada dos mesmos dados que o target). Corrigido usando
+> apenas features históricas até o corte temporal — o AUC honesto é 0.666.
+>
+> **Recall de 59.3%** significa que o modelo captura **~59 de cada 100 clientes** que 
+> entrarão em default, usando apenas dados históricos até a data de corte — sem vazar
+> informação do futuro.
 
 ---
 
@@ -33,16 +38,16 @@ select
 ```sql feature_importance
 select feature, importance, rank() over (order by importance desc) as ranking
 from (values
-  ('overall_default_rate', 0.2774),
-  ('app_engagement_score', 0.1193),
-  ('products_count', 0.0551),
-  ('total_contracts', 0.0426),
-  ('acquisition_channel_paid_search', 0.0174),
-  ('age_group_36-45', 0.0163),
-  ('income_declared', 0.0148),
-  ('avg_days_late', 0.0145),
-  ('customer_segment_starter', 0.0138),
-  ('best_payment_streak', 0.0121)
+  ('total_payments_hist', 0.4969),
+  ('late_count_hist', 0.2230),
+  ('late_rate_hist', 0.2207),
+  ('total_contracts_hist', 0.1558),
+  ('avg_days_late_hist', 0.0792),
+  ('avg_completion_rate', 0.0735),
+  ('has_collateral', 0.0673),
+  ('max_days_late_hist', 0.0582),
+  ('total_debt_hist', 0.0388),
+  ('age_group_26-35', 0.0342)
 ) t(feature, importance)
 order by importance desc
 ```
@@ -92,14 +97,21 @@ order by 1
 
 ---
 
-## 3 Perfis de Cliente — Explicação da Predição
+## 3 Perfis de Cliente — Segmentação por Regra de Negócio
+
+> Os `risk_tier`/`credit_score` abaixo vêm de uma regra de negócio determinística
+> na camada de marts (baseada em `overall_default_rate`, `app_engagement_score`
+> etc.) — é a segmentação usada no dashboard de portfólio, **diferente** do
+> modelo de ML (Seção acima), que prevê probabilidade de default futuro usando
+> só features históricas até o corte. Não são a mesma coisa: a regra de negócio
+> descreve o presente/passado do cliente, o modelo de ML tenta prever o futuro.
 
 ### Perfil 1: Cliente Champion (Score 924)
 - **Histórico de pagamento:** 0% de default, média -2 dias (antecipado)
 - **Engajamento digital:** Score 87 — acessa app 15x/mês
 - **Produtos:** 3 produtos ativos (multi-produto)
 - **Canal:** Organic
-- **Predição:** Risco MUITO BAIXO | Prob. default: 0.1%
+- **Classificação:** Risco MUITO BAIXO (`risk_tier = very_low`)
 - **Ação:** Oferta de limite aumentado e produto premium
 
 ### Perfil 2: Cliente At-Risk (Score 340)
@@ -107,7 +119,7 @@ order by 1
 - **Engajamento digital:** Score 18 — último login há 22 dias (queda 60%)
 - **Produtos:** 1 produto (sem diversificação)
 - **Canal:** paid_search
-- **Predição:** Risco ALTO | Prob. default: 76%
+- **Classificação:** Risco ALTO (`risk_tier = high`)
 - **Ação:** Contato imediato — SMS dia 1, WhatsApp dia 3
 
 ### Perfil 3: Cliente Borderline (Score 512)
@@ -115,7 +127,7 @@ order by 1
 - **Engajamento digital:** Score 41 — estável
 - **Produtos:** 2 produtos
 - **Canal:** Partner
-- **Predição:** Risco MÉDIO | Prob. default: 23%
+- **Classificação:** Risco MÉDIO (`risk_tier = medium`)
 - **Ação:** Monitorar — acionar se engajamento cair >30%
 
 ---

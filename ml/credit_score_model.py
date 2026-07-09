@@ -10,6 +10,8 @@ import io
 import warnings
 warnings.filterwarnings("ignore")
 
+from pathlib import Path
+
 import duckdb
 import numpy as np
 import pandas as pd
@@ -27,7 +29,7 @@ from sklearn.metrics import (
     confusion_matrix, f1_score, precision_score, recall_score, accuracy_score
 )
 
-DB_PATH = "C:/Users/lineg/credit-analytics-360/gen/data/financeflow.duckdb"
+DB_PATH = str(Path(__file__).resolve().parent.parent / "gen" / "data" / "financeflow.duckdb")
 
 # ─── PASSO 1: Carregar dados SEM LEAKAGE ────────────────────────────────────
 # Corte temporal: features ate 2024-06-30, target = inadimplencia 2024-07-01 a 2024-09-30

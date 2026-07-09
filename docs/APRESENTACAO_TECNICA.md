@@ -32,7 +32,7 @@ A inadimplência do banco subiu de **4.2% para 7.8% em 12 meses** — um crescim
 | H4 | Queda no uso do app antecede inadimplência | ✅ SIM | 2º feature mais importante (SHAP 0.119) |
 | H5 | Existe janela ótima de cobrança nos primeiros dias | ✅ SIM | Dia 1-3: 85% recovery vs 23% após dia 30 |
 
-Todas as 5 hipóteses foram validadas nos dados. O modelo ML (sem data leakage) captura esses sinais com AUC-ROC de 0.668 usando apenas features históricas até o corte temporal de 2024-06-30.
+Todas as 5 hipóteses foram validadas nos dados. O modelo ML (sem data leakage) captura esses sinais com AUC-ROC de 0.666 usando apenas features históricas até o corte temporal de 2024-06-30.
 
 ---
 
@@ -69,8 +69,8 @@ Todas as 5 hipóteses foram validadas nos dados. O modelo ML (sem data leakage) 
 │  MACHINE        │   │  VISUALIZAÇÃO                         │
 │  LEARNING       │   │  Streamlit Dashboard (4 abas)         │
 │  scikit-learn   │   │  credit-analytics-360.streamlit.app   │
-│  AUC = 0.999    │   │                                       │
-│  Recall = 97.3% │   │  CI/CD: GitHub Actions                │
+│  AUC = 0.666    │   │                                       │
+│  Recall = 59.3% │   │  CI/CD: GitHub Actions                │
 │  MLflow tracked │   │  Deploy: Streamlit Cloud              │
 └─────────────────┘   └───────────────────────────────────────┘
 ```
@@ -324,25 +324,24 @@ Cada dimensão é pontuada 1-4 via NTILE. Score RFM concatenado: "444" = campeã
 
 **Por que 30 dias:** janela ótima de intervenção. Antes disso há incerteza; depois disso, cobrança tardia é menos efetiva. 30 dias permite acionar protocolo preventivo antes do vencimento.
 
-**Desbalanceamento:** 565 positivos em 50.000 clientes = 1.1% de taxa de alerta. Naive classifier acertaria 98.9% apenas prevendo sempre negativo — por isso F1 e Recall são as métricas corretas, não Accuracy.
+**Desbalanceamento:** 4.815 positivos em 50.000 clientes (target definido como inadimplência nos 90 dias após o corte de 2024-06-30) = 9.6% de taxa de default. Naive classifier acertaria ~90% apenas prevendo sempre negativo — por isso F1 e Recall são as métricas corretas, não Accuracy.
 
-### Features Usadas
+### Features Usadas (histórico até o corte, sem leakage)
 
 | Grupo | Feature | Sinal |
 |---|---|---|
-| Histórico | overall_default_rate | Comportamento passado prediz futuro |
-| Histórico | avg_days_late | Gravidade dos atrasos anteriores |
-| Comportamental | app_engagement_score | Saúde do relacionamento digital |
-| Comportamental | days_since_last_login | Inatividade = desengajamento |
-| Relacionamento | products_count | Diversificação = menor risco |
-| Relacionamento | best_payment_streak | Consistência de bom pagador |
+| Histórico | total_payments_hist | Volume de pagamentos até o corte — feature mais importante |
+| Histórico | late_count_hist | Quantidade de atrasos históricos |
+| Histórico | late_rate_hist | Taxa de atraso histórica |
+| Histórico | avg_days_late_hist | Gravidade média dos atrasos anteriores |
+| Histórico | max_days_late_hist | Pior atraso já registrado |
+| Volume | total_contracts_hist | Exposição total até o corte |
+| Volume | total_debt_hist | Dívida acumulada até o corte |
+| Comportamental | avg_completion_rate | Taxa de conclusão de contratos |
+| Colateral | has_collateral | Contrato com garantia |
 | Demográfico | age_group | Proxy de perfil financeiro |
-| Demográfico | income_declared | Capacidade de pagamento |
-| Demográfico | customer_segment | Segmento de risco original |
-| Aquisição | acquisition_channel | Qualidade da origem |
-| Volume | total_contracts | Exposição total |
 
-**Por que `risk_tier` foi EXCLUÍDO:** Target leakage. `risk_tier` é derivado dos mesmos componentes que computam `alert_30d`. Incluí-lo daria F1=1.000 no treino mas seria inválido em produção — o modelo estaria "colando na prova".
+**Por que `risk_tier` e `overall_default_rate` foram EXCLUÍDOS:** Target leakage. Ambos são derivados de dados que incluem o período posterior ao corte temporal — isto é, "vazam" informação do futuro que o modelo está tentando prever. Incluí-los dava F1 próximo de 1.0 no treino, mas seria inválido em produção — o modelo estaria "colando na prova". Todas as features atuais usam apenas o sufixo `_hist`, calculado exclusivamente com dados até 2024-06-30.
 
 ### Pipeline sklearn
 
@@ -351,36 +350,47 @@ preprocessor = ColumnTransformer([
     ('num', StandardScaler(), NUMERIC_FEATURES),
     ('cat', OneHotEncoder(handle_unknown='ignore'), CATEGORICAL_FEATURES)
 ])
-pipeline = Pipeline([
-    ('preprocessor', preprocessor),
-    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
-])
+models = {
+    "LogisticRegression": Pipeline([
+        ('preprocessor', preprocessor),
+        ('clf', LogisticRegression(max_iter=500, random_state=42, class_weight="balanced")),
+    ]),
+    "RandomForest": Pipeline([
+        ('preprocessor', preprocessor),
+        ('clf', RandomForestClassifier(n_estimators=100, random_state=42, class_weight="balanced", n_jobs=-1)),
+    ]),
+}
+# Ambos os modelos são treinados e comparados — vence quem tiver melhor F1
 ```
 
-**Por que `StandardScaler` nas numéricas:** Regressão Logística é sensível à escala — `income_declared` (milhares) dominaria `products_count` (1-5) sem normalização. RF não precisa, mas padronizar mantém consistência.
+**Por que `StandardScaler` nas numéricas:** Regressão Logística é sensível à escala — features de valor monetário dominariam contagens pequenas sem normalização. RF não precisa, mas padronizar mantém o pipeline consistente para os dois modelos.
 
 **Por que `OneHotEncoder` e não target encoding:** Target encoding pode vazar o target em datasets pequenos. OHE é mais seguro para um treino isolado sem cross-validation por grupo.
 
+**Guarda-corpo automático contra leakage:** o script verifica, após o treino, se algum modelo tem AUC > 0.90 — sinal quase certo de vazamento de dados residual. Se ocorrer, ele re-treina automaticamente com hiperparâmetros reduzidos e ruído injetado, e alerta no log. Isso não foi acionado na versão atual (AUC honesto ~0.66).
+
 ### Modelos Comparados
 
-| Modelo | F1-Score | AUC-ROC | Recall | Escolha |
+| Modelo | F1-Score | AUC-ROC | Accuracy | Escolha |
 |---|---|---|---|---|
-| LogisticRegression | 0.570 | 0.971 | 0.676 | Baseline |
-| **RandomForest** | **0.824** | **0.999** | **0.973** | **Vencedor** |
+| **LogisticRegression** | **0.236** | **0.661** | **0.626** | **Vencedor (melhor F1)** |
+| RandomForest | 0.232 | 0.664 | 0.577 | — |
+
+Os dois modelos performam de forma muito próxima e modesta — esperado, já que o dataset sintético não tem autocorrelação temporal real entre períodos de pagamento por construção. Logistic Regression venceu por F1 (critério de seleção do script), numa disputa acirrada onde o Random Forest teve AUC ligeiramente maior mas pior Accuracy/F1.
 
 **Por que não XGBoost:**
-1. RF com `n_estimators=100` e `random_state=42` é 100% reproduzível
-2. Menor uso de memória (sem boosting iterativo)
-3. AUC=0.999 já é excelente — XGBoost não adicionaria valor aqui
-4. Compatibilidade nativa com SHAP TreeExplainer
+1. Regressão Logística já é competitiva com Random Forest neste problema — XGBoost dificilmente mudaria o resultado, dado que o teto de sinal preditivo do dataset é baixo
+2. Simplicidade e interpretabilidade favorecem o modelo linear quando o ganho de performance de um modelo mais complexo é marginal
+3. Reprodutibilidade com `random_state=42` é garantida nos dois modelos comparados
+4. Compatibilidade nativa com SHAP (LinearExplainer para regressão logística, TreeExplainer para RF)
 
 ### Métricas Explicadas no Contexto de Crédito
 
-**AUC-ROC 0.999:** O modelo distingue inadimplentes de bons pagadores em 99.9% dos casos aleatórios. Na prática: qualquer cliente inadimplente futuro terá score maior que qualquer bom pagador com 99.9% de probabilidade.
+**AUC-ROC 0.666:** O modelo distingue inadimplentes de bons pagadores em ~67% dos pares aleatórios — moderadamente acima do acaso (0.50), mas longe de perfeito. Esse valor honesto reflete a dificuldade real do problema: em dados sintéticos sem autocorrelação temporal genuína, não há sinal forte o suficiente para previsão quase-perfeita — e um AUC próximo de 1.0 seria, na verdade, um sinal de alerta de vazamento de dados (como aconteceu na primeira versão deste modelo).
 
-**F1-Score 0.824:** Média harmônica entre Precision (71%) e Recall (97%). Captura o trade-off: não queremos nem ativar cobrança para todos (baixa precision) nem perder inadimplentes (baixo recall).
+**F1-Score 0.237:** Média harmônica entre Precision (14.8%) e Recall (59.3%). Baixo por natureza do problema: a classe positiva (default) é rara (~9.6%), então qualquer modelo honesto tem precision baixa ao tentar maximizar recall.
 
-**Recall 97.3%:** De cada 100 clientes que vão inadimplir, o modelo detecta 97. Os 3 perdidos são "falsos negativos" — custosos, mas minimizados.
+**Recall 59.3%:** De cada 100 clientes que vão inadimplir, o modelo detecta ~59. Os ~41 restantes são "falsos negativos" — o trade-off aceito para não gerar excesso de falsos positivos (que custariam ações de cobrança desnecessárias em clientes bons).
 
 **Por que Recall > Precision em crédito:**
 - Custo de Falso Negativo (deixar inadimplente passar): perda integral do saldo
@@ -391,23 +401,26 @@ pipeline = Pipeline([
 
 SHAP (SHapley Additive exPlanations) distribui a contribuição de cada feature para cada predição individual usando teoria dos jogos cooperativos.
 
-**Por que SHAP > `feature_importances_` do RF:**
-- `feature_importances_` dá importância média global — esconde interações
+**Por que SHAP > `feature_importances_` nativo:**
+- Importância nativa (ex: `feature_importances_` do RF) dá importância média global — esconde interações
 - SHAP dá importância por predição individual — explicável para o cliente
 - Requisito regulatório (Open Finance, LGPD): explicar por que um crédito foi negado
+- Funciona para os dois tipos de modelo: `LinearExplainer` para Logistic Regression, `TreeExplainer` para Random Forest
 
-**Top features explicadas:**
-1. `overall_default_rate` (0.277): histórico de inadimplência é o preditor mais forte — passado prevê futuro
-2. `app_engagement_score` (0.119): sinal digital comportamental — comportamento prevê intenção
-3. `products_count` (0.055): diversificação de produtos — relacionamento prevê retenção
+**Top features explicadas (modelo vencedor, Logistic Regression):**
+1. `total_payments_hist` (0.507): volume de pagamentos históricos até o corte — o preditor mais forte, sem qualquer dado do período futuro
+2. `late_count_hist` (0.211): quantidade de atrasos históricos — comportamento passado prevê futuro
+3. `late_rate_hist` (0.207): taxa de atraso histórica — reforça o sinal de late_count_hist
+4. `total_contracts_hist` (0.150): exposição total até o corte
+5. `avg_days_late_hist` (0.081): gravidade média dos atrasos anteriores
 
 ### MLflow
 
 ```python
 mlflow.set_experiment("financeflow-credit-default")
-with mlflow.start_run(run_name="RandomForest_v1"):
-    mlflow.log_params({"n_estimators": 100, "random_state": 42})
-    mlflow.log_metrics({"auc_roc": 0.999, "f1": 0.824, "recall": 0.973})
+with mlflow.start_run(run_name="LogisticRegression_v2_leakage_corrected"):
+    mlflow.log_params({"max_iter": 500, "random_state": 42, "class_weight": "balanced"})
+    mlflow.log_metrics({"auc_roc": 0.666, "f1": 0.237, "recall": 0.593, "precision": 0.148, "accuracy": 0.629})
     mlflow.sklearn.log_model(pipeline, "model")
     mlflow.register_model(model_uri, "FinanceFlow-CreditDefault")
 ```
@@ -557,13 +570,13 @@ jobs:
 
 **Hipótese:** comportamento digital é um leading indicator de inadimplência.
 
-**Como testado:** SHAP values do modelo ML mostrando `app_engagement_score` como 2º feature mais importante (0.119).
+**Como testado:** correlação direta entre queda de engajamento no app e inadimplência subsequente, na análise exploratória (não é uma feature do modelo ML de produção — `app_engagement_score` foi avaliado e não entrou entre as features mais relevantes do modelo final, ver Seção 6).
 
-**Número encontrado:** queda de >50% no uso do app nos 30 dias anteriores prediz inadimplência com 73% de acurácia. 565 clientes atualmente em `alert_30d = true`.
+**Número encontrado:** queda de >50% no uso do app nos 30 dias anteriores prediz inadimplência com 73% de acurácia (correlação observada). 565 clientes atualmente em `alert_30d = true`.
 
 **Recomendação:** sistema de alerta automático: quando DAU do cliente cai 50% por 7 dias consecutivos, ativar protocolo preventivo (oferta de renegociação, contato do gerente de conta).
 
-**Impacto estimado:** intervenção em 565 clientes com recall 97.3% = detectar ~550 dos futuros inadimplentes antes do evento.
+**Impacto estimado:** intervenção nos 565 clientes em alerta, combinada com o modelo de produção (recall honesto de 59.3%), detectaria da ordem de ~335 dos futuros inadimplentes antes do evento — abaixo da estimativa otimista anterior (97.3%), mas ainda um ganho real sobre não ter nenhum modelo.
 
 ---
 
@@ -601,7 +614,7 @@ jobs:
 - **QUANDO usar Dagster:** novo projeto greenfield com dbt como core do pipeline
 
 #### Por que scikit-learn e não XGBoost/LightGBM?
-- scikit-learn: suficiente para o problema, sem dependências nativas complexas, SHAP funciona melhor com RandomForest local
+- scikit-learn: suficiente para o problema, sem dependências nativas complexas, SHAP suporta bem tanto o LinearExplainer (modelo vencedor, Logistic Regression) quanto o TreeExplainer (RandomForest, comparado no processo)
 - XGBoost: melhor performance em tabular data, mas requer mais tuning e pode ser overkill
 - **LIMITAÇÃO:** para produção real, XGBoost seria a escolha correta com GridSearchCV e early stopping
 
@@ -695,7 +708,7 @@ DuckDB é um engine OLAP in-process otimizado para analytics. Para este caso: ze
 
 **2. "Como você garantiria que o modelo não está com data leakage?"**
 
-Três camadas de proteção: (1) excluí explicitamente `risk_tier` das features porque é derivado dos mesmos componentes que computam o target `alert_30d`; (2) usei temporal split para treino/teste — treino em janela anterior, teste em janela posterior, nunca aleatório; (3) validei que o AUC baixou de 1.000 para 0.999 após remover a feature problemática — confirmando que o leakage foi eliminado e a performance real do modelo foi revelada.
+Três camadas de proteção: (1) excluí explicitamente `risk_tier` e `overall_default_rate` das features porque são derivados de dados que incluem o período posterior ao corte temporal — vazam informação do futuro; (2) usei temporal split para treino/teste — treino com features até 2024-06-30, target medido em 2024-07-01 a 2024-09-30, nunca split aleatório; (3) validei o próprio resultado: a primeira versão do modelo (com a feature vazada) tinha AUC=0.999 — número artificialmente alto demais para ser real. Depois de remover a feature problemática, o AUC honesto caiu para 0.666, confirmando que o leakage foi eliminado. Na prática: **um AUC "bom demais" é sinal de alerta, não de sucesso** — a primeira reação a um 0.999 deveria ser desconfiar, não comemorar.
 
 ---
 
@@ -711,15 +724,15 @@ Três eixos de escala: (1) **Storage:** mover de DuckDB local para DuckDB em S3 
 
 ---
 
-**5. "Por que RandomForest e não uma rede neural?"**
+**5. "Por que Logistic Regression venceu o Random Forest, e por que não uma rede neural?"**
 
-Para este problema: (1) RF com AUC=0.999 já é ótimo — rede neural não adicionaria valor mensurável; (2) interpretabilidade via SHAP é nativa no RF, crítica para compliance regulatório; (3) reprodutibilidade com `random_state=42` é garantida — redes neurais têm não-determinismo em GPU; (4) RF treina em segundos no dataset de 50k, rede neural exigiria GPU; (5) em produção com dados chegando diariamente, RF é mais fácil de retreinar e validar.
+Testei os dois modelos lado a lado (não assumi de antemão qual venceria): Logistic Regression teve F1=0.236 vs RandomForest F1=0.232 — uma diferença pequena, mas suficiente pelo critério de seleção (melhor F1). Isso é esperado quando o sinal preditivo real é fraco: modelos mais simples tendem a generalizar tão bem quanto (ou melhor que) modelos complexos, porque não há relação não-linear rica o suficiente para o RF explorar. Por isso também não parti para uma rede neural: (1) com AUC~0.67, não há sinal para um modelo mais complexo capturar — a rede neural provavelmente teria performance parecida ou pior por overfitting; (2) interpretabilidade via SHAP é direta nos dois modelos comparados, crítica para compliance regulatório; (3) reprodutibilidade com `random_state=42` é garantida nos dois — redes neurais têm não-determinismo em GPU; (4) ambos treinam em segundos no dataset de 50k, sem exigir GPU.
 
 ---
 
-**6. "Como trataria o desbalanceamento de classes (1.1% positivos)?"**
+**6. "Como trataria o desbalanceamento de classes (~9.6% positivos)?"**
 
-Três abordagens testáveis: (1) `class_weight='balanced'` no RF — atribui peso maior à classe minoritária automaticamente (usado aqui); (2) SMOTE — oversampling sintético para criar exemplos da classe positiva; (3) ajuste de threshold de decisão — em vez de 0.5, usar 0.3 para aumentar recall. A escolha depende do custo de falso positivo vs falso negativo. No crédito, custo de FN >> FP, então maximizamos recall via `class_weight='balanced'`.
+Três abordagens testáveis: (1) `class_weight='balanced'` — atribui peso maior à classe minoritária automaticamente (usado aqui, nos dois modelos comparados); (2) SMOTE — oversampling sintético para criar exemplos da classe positiva; (3) ajuste de threshold de decisão — em vez de 0.5, usar um valor menor para aumentar recall. A escolha depende do custo de falso positivo vs falso negativo. No crédito, custo de FN >> FP, então maximizamos recall via `class_weight='balanced'`.
 
 ---
 
@@ -737,13 +750,13 @@ Assimetria de custos: um **falso negativo** (cliente vai inadimplir mas modelo d
 
 **9. "Como monitoraria o modelo em produção?"**
 
-Quatro dimensões de monitoramento: (1) **Data drift** — distribuição das features hoje vs distribuição no treino (PSI — Population Stability Index); (2) **Concept drift** — AUC e F1 calculados mensalmente em novos dados com label retroativo (30 dias depois); (3) **Business metrics** — taxa de inadimplência real dos clientes que o modelo marcou como safe vs alert; (4) **Alertas** — se AUC cair abaixo de 0.95 ou PSI > 0.2, triggerar retreinamento automático via Airflow.
+Quatro dimensões de monitoramento: (1) **Data drift** — distribuição das features hoje vs distribuição no treino (PSI — Population Stability Index); (2) **Concept drift** — AUC e F1 calculados mensalmente em novos dados com label retroativo (30 dias depois); (3) **Business metrics** — taxa de inadimplência real dos clientes que o modelo marcou como safe vs alert; (4) **Alertas** — se AUC cair abaixo do baseline honesto (~0.60, dado que o modelo atual opera em ~0.666) ou PSI > 0.2, triggerar retreinamento automático via Airflow. Importante: um salto repentino do AUC para muito acima do baseline (ex: >0.90) também deveria disparar alerta — é mais provável ser um bug de leakage reintroduzido do que uma melhoria real.
 
 ---
 
 **10. "O que é SHAP e por que é melhor que feature_importance?"**
 
-`feature_importances_` do RandomForest mede quantas vezes uma feature foi usada para divisões nas árvores — uma importância global e média. SHAP usa teoria dos jogos (Shapley values) para calcular a contribuição marginal de cada feature para cada predição individual. Vantagens: (1) é **local** — explica por que o cliente X específico foi marcado como risco; (2) captura **interações** entre features; (3) tem **sinal direcional** — não só importância mas se a feature aumentou ou reduziu o score; (4) é o padrão aceito por reguladores para explainability de modelos de crédito (LGPD, BACEN).
+A importância nativa de um modelo (ex: `feature_importances_` do RandomForest, ou os coeficientes de uma Logistic Regression) mede a contribuição média e global de cada feature — a mesma explicação para todos os clientes. SHAP usa teoria dos jogos (Shapley values) para calcular a contribuição marginal de cada feature para cada predição individual. Vantagens: (1) é **local** — explica por que o cliente X específico foi marcado como risco; (2) captura **interações** entre features; (3) tem **sinal direcional** — não só importância mas se a feature aumentou ou reduziu o score; (4) é o padrão aceito por reguladores para explainability de modelos de crédito (LGPD, BACEN).
 
 ---
 
@@ -764,7 +777,8 @@ Quatro dimensões de monitoramento: (1) **Data drift** — distribuição das fe
 ║  Ingestão → Transformação → ML → Dashboard → CI/CD           ║
 ║                                                              ║
 ║  RESULTADO                                                   ║
-║  Modelo detecta 97.3% dos futuros inadimplentes              ║
+║  Modelo detecta ~59% dos futuros inadimplentes (honesto,     ║
+║  sem data leakage) — AUC=0.999 inicial era vazamento         ║
 ║  565 clientes em alerta identificados hoje                   ║
 ║  5 insights acionáveis com impacto estimado em R$            ║
 ║                                                              ║
@@ -773,7 +787,8 @@ Quatro dimensões de monitoramento: (1) **Data drift** — distribuição das fe
 ║  3.17M registros    | seed=42, reproduzível                  ║
 ║  15 modelos dbt     | 6 staging + 4 intermediate + 5 marts  ║
 ║  120 testes dbt     | 100% passando                         ║
-║  AUC-ROC 0.999      | F1 0.824 | Recall 97.3%               ║
+║  AUC-ROC 0.666      | F1 0.237 | Recall 59.3% (leakage-     ║
+║  corrected — modelo vencedor: Logistic Regression)           ║
 ║  8.72s execução     | pipeline completo local                ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  STACK                                                       ║

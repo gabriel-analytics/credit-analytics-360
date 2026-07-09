@@ -1,0 +1,10 @@
+artifact_location: file:///C:/Users/lineg/credit-analytics-360/ml/mlruns/703922072848625532/models/m-cd2ee65e15784367a4d3acbda3ba9e80/artifacts
+creation_timestamp: 1783630795006
+experiment_id: '703922072848625532'
+last_updated_timestamp: 1783630812859
+model_id: m-cd2ee65e15784367a4d3acbda3ba9e80
+model_type: null
+name: credit_model
+source_run_id: dcc85cde38ec4c65a9a2ad13efd754b4
+status: 2
+status_message: null

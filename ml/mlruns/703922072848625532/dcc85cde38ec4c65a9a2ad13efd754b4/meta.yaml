@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/lineg/credit-analytics-360/ml/mlruns/703922072848625532/dcc85cde38ec4c65a9a2ad13efd754b4/artifacts
+end_time: 1783630812885
+entry_point_name: ''
+experiment_id: '703922072848625532'
+lifecycle_stage: active
+run_id: dcc85cde38ec4c65a9a2ad13efd754b4
+run_name: credit_default_rf_v1
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1783630793374
+status: 3
+tags: []
+user_id: lineg

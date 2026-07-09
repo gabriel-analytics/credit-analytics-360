@@ -1,0 +1,16 @@
+creation_timestamp: 1783630813105
+current_stage: None
+deployment_job_state: null
+description: null
+last_updated_timestamp: 1783630813105
+model_id: m-cd2ee65e15784367a4d3acbda3ba9e80
+name: FinanceFlow-CreditDefault
+run_id: dcc85cde38ec4c65a9a2ad13efd754b4
+run_link: null
+source: models:/m-cd2ee65e15784367a4d3acbda3ba9e80
+status: READY
+status_message: null
+storage_location: file:///C:/Users/lineg/credit-analytics-360/ml/mlruns/703922072848625532/models/m-cd2ee65e15784367a4d3acbda3ba9e80/artifacts
+user_id: null
+version: 2
+workspace: default
